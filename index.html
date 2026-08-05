@@ -3,201 +3,201 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Traktör Sürüş Simülatörü</title>
+    <title>Minecraft Web Edition</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
-        body {
-            background-color: #1e293b;
-            color: white;
-            font-family: sans-serif;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
+        body { overflow: hidden; font-family: sans-serif; background: #000; }
+        #canvas-container { width: 100vw; height: 100vh; }
+        
+        /* Crosshair */
+        #crosshair {
+            position: absolute; top: 50%; left: 50%;
+            width: 14px; height: 14px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
         }
-        #game-container {
-            position: relative;
-            width: 100vw;
-            height: 100vh;
-            background: #87CEEB; /* Gökyüzü */
-            overflow: hidden;
+        #crosshair::before, #crosshair::after {
+            content: ''; position: absolute; background: white;
         }
-        canvas {
-            display: block;
-            width: 100%;
-            height: 100%;
-        }
+        #crosshair::before { top: 6px; left: 0; width: 14px; height: 2px; }
+        #crosshair::after { top: 0; left: 6px; width: 2px; height: 14px; }
+
         /* Mobil Kontroller */
-        .controls {
-            position: absolute;
-            bottom: 20px;
-            width: 100%;
-            display: flex;
-            justify-content: space-between;
-            padding: 0 20px;
-            box-sizing: border-box;
+        .touch-btn {
+            position: absolute; background: rgba(0,0,0,0.5); border: 2px solid #fff;
+            border-radius: 50%; color: white; display: flex; align-items: center;
+            justify-content: center; font-weight: bold; font-size: 18px; touch-action: manipulation;
         }
-        .btn-group { display: flex; gap: 15px; }
-        .btn {
-            width: 70px;
-            height: 70px;
-            background: rgba(0, 0, 0, 0.6);
-            border: 2px solid white;
-            border-radius: 50%;
-            color: white;
-            font-size: 24px;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            touch-action: manipulation;
+        #btn-up { bottom: 110px; left: 70px; width: 50px; height: 50px; }
+        #btn-down { bottom: 10px; left: 70px; width: 50px; height: 50px; }
+        #btn-left { bottom: 60px; left: 20px; width: 50px; height: 50px; }
+        #btn-right { bottom: 60px; left: 120px; width: 50px; height: 50px; }
+        
+        #btn-break { bottom: 80px; right: 90px; width: 60px; height: 60px; background: rgba(220,38,38,0.7); }
+        #btn-place { bottom: 80px; right: 20px; width: 60px; height: 60px; background: rgba(22,163,74,0.7); }
+        
+        #block-select {
+            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 10px; background: rgba(0,0,0,0.6); padding: 5px; border-radius: 8px;
         }
-        .btn:active { background: rgba(255, 255, 255, 0.4); }
-        #score-board {
-            position: absolute;
-            top: 15px;
-            left: 15px;
-            background: rgba(0,0,0,0.5);
-            padding: 10px 20px;
-            border-radius: 10px;
-            font-size: 18px;
-            font-weight: bold;
+        .block-opt {
+            width: 35px; height: 35px; border: 2px solid transparent; cursor: pointer; border-radius: 4px;
         }
+        .block-opt.selected { border-color: yellow; }
     </style>
+    <!-- 3D Kütüphanesi (Three.js) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
-<div id="game-container">
-    <div id="score-board">🚜 Traktör Hızı: <span id="speed">0</span> km/h</div>
-    <canvas id="canvas"></canvas>
-    
-    <div class="controls">
-        <div class="btn-group">
-            <div class="btn" id="left">◄</div>
-            <div class="btn" id="right">►</div>
-        </div>
-        <div class="btn-group">
-            <div class="btn" style="background: #ef4444;" id="brake">Fren</div>
-            <div class="btn" style="background: #22c55e;" id="gas">GAZ</div>
-        </div>
-    </div>
+<div id="crosshair"></div>
+<div id="canvas-container"></div>
+
+<!-- Blok Seçimi -->
+<div id="block-select">
+    <div class="block-opt selected" style="background: #557a2b;" onclick="selectBlock(1)"></div>
+    <div class="block-opt" style="background: #8b5a2b;" onclick="selectBlock(2)"></div>
+    <div class="block-opt" style="background: #808080;" onclick="selectBlock(3)"></div>
 </div>
 
+<!-- Dokunmatik Tuşlar -->
+<div class="touch-btn" id="btn-up">▲</div>
+<div class="touch-btn" id="btn-down">▼</div>
+<div class="touch-btn" id="btn-left">◄</div>
+<div class="touch-btn" id="btn-right">►</div>
+
+<div class="touch-btn" id="btn-break">KIR</div>
+<div class="touch-btn" id="btn-place">KOY</div>
+
 <script>
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const speedText = document.getElementById('speed');
+    // 3D Sahne Kurulumu
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87ceeb); // Gökyüzü Mavisı
+    scene.fog = new THREE.FogExp2(0x87ceeb, 0.03);
 
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-    let tractor = {
-        x: canvas.width / 2 - 30,
-        y: canvas.height - 180,
-        width: 60,
-        height: 90,
-        speed: 0,
-        maxSpeed: 8,
-        accel: 0.2,
-        friction: 0.05,
-        steer: 0
+    // Işıklandırma
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+    dirLight.position.set(20, 40, 20);
+    scene.add(dirLight);
+
+    // Blok Materyalleri
+    const materials = {
+        1: new THREE.MeshLambertMaterial({ color: 0x557a2b }), // Çim
+        2: new THREE.MeshLambertMaterial({ color: 0x8b5a2b }), // Toprak
+        3: new THREE.MeshLambertMaterial({ color: 0x808080 })  // Taş
     };
+    const blockGeo = new THREE.BoxGeometry(1, 1, 1);
+    const blocks = [];
+    let selectedBlockType = 1;
 
-    let keys = { left: false, right: false, gas: false, brake: false };
-
-    // Dokunmatik Kontroller
-    const bindTouch = (id, key) => {
-        const el = document.getElementById(id);
-        el.addEventListener('touchstart', (e) => { e.preventDefault(); keys[key] = true; });
-        el.addEventListener('touchend', (e) => { e.preventDefault(); keys[key] = false; });
-        el.addEventListener('mousedown', () => keys[key] = true);
-        el.addEventListener('mouseup', () => keys[key] = false);
-    };
-
-    bindTouch('left', 'left');
-    bindTouch('right', 'right');
-    bindTouch('gas', 'gas');
-    bindTouch('brake', 'brake');
-
-    let roadOffset = 0;
-
-    function drawField() {
-        // Tarla & Yol Çizimi
-        ctx.fillStyle = '#15803d'; // Yeşil çim
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // Toprak Yol (Traktör Yolu)
-        ctx.fillStyle = '#78350f';
-        ctx.fillRect(canvas.width / 4, 0, canvas.width / 2, canvas.height);
-
-        // Yol Çizgileri
-        ctx.strokeStyle = '#fef08a';
-        ctx.lineWidth = 6;
-        ctx.setLineDash([20, 20]);
-        ctx.lineDashOffset = -roadOffset;
-        ctx.beginPath();
-        ctx.moveTo(canvas.width / 2, 0);
-        ctx.lineTo(canvas.width / 2, canvas.height);
-        ctx.stroke();
-    }
-
-    function drawTractor() {
-        ctx.save();
-        ctx.translate(tractor.x + tractor.width/2, tractor.y + tractor.height/2);
-        
-        // Gövde (Yeşil Traktör)
-        ctx.fillStyle = '#16a34a';
-        ctx.fillRect(-25, -40, 50, 80);
-
-        // Kabin
-        ctx.fillStyle = '#0284c7';
-        ctx.fillRect(-20, -10, 40, 35);
-
-        // Büyük Arka Tekerlekler
-        ctx.fillStyle = '#000';
-        ctx.fillRect(-32, 10, 10, 30);
-        ctx.fillRect(22, 10, 10, 30);
-
-        // Küçük Ön Tekerlekler
-        ctx.fillRect(-30, -35, 8, 20);
-        ctx.fillRect(22, -35, 8, 20);
-
-        // Egzoz
-        ctx.fillStyle = '#475569';
-        ctx.fillRect(10, -35, 5, 10);
-
-        ctx.restore();
-    }
-
-    function update() {
-        // Gaz & Fren
-        if (keys.gas) {
-            if (tractor.speed < tractor.maxSpeed) tractor.speed += tractor.accel;
-        } else if (keys.brake) {
-            if (tractor.speed > -3) tractor.speed -= tractor.accel;
-        } else {
-            if (tractor.speed > 0) tractor.speed -= tractor.friction;
-            if (tractor.speed < 0) tractor.speed += tractor.friction;
-            if (Math.abs(tractor.speed) < 0.1) tractor.speed = 0;
+    // Harita Oluşturma (16x16 Dünya)
+    for (let x = -8; x < 8; x++) {
+        for (let z = -8; z < 8; z++) {
+            const height = Math.floor(Math.sin(x * 0.3) + Math.cos(z * 0.3)) + 2;
+            for (let y = 0; y < height; y++) {
+                const type = y === height - 1 ? 1 : (y > height - 3 ? 2 : 3);
+                const mesh = new THREE.Mesh(blockGeo, materials[type]);
+                mesh.position.set(x, y, z);
+                scene.add(mesh);
+                blocks.push(mesh);
+            }
         }
-
-        // Direksiyon
-        if (keys.left && tractor.x > canvas.width / 4) tractor.x -= 4;
-        if (keys.right && tractor.x < (canvas.width / 4 + canvas.width / 2) - tractor.width) tractor.x += 4;
-
-        // Yol Hareketi
-        roadOffset += tractor.speed * 2;
-        speedText.innerText = Math.round(tractor.speed * 10);
-
-        drawField();
-        drawTractor();
-
-        requestAnimationFrame(update);
     }
 
-    update();
+    camera.position.set(0, 5, 5);
+
+    // Kontroller & Hareket
+    let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2(0, 0);
+
+    function bindBtn(id, setVal) {
+        const el = document.getElementById(id);
+        el.addEventListener('touchstart', (e) => { e.preventDefault(); setVal(true); });
+        el.addEventListener('touchend', (e) => { e.preventDefault(); setVal(false); });
+    }
+
+    bindBtn('btn-up', v => moveForward = v);
+    bindBtn('btn-down', v => moveBackward = v);
+    bindBtn('btn-left', v => moveLeft = v);
+    bindBtn('btn-right', v => moveRight = v);
+
+    document.getElementById('btn-break').addEventListener('click', breakBlock);
+    document.getElementById('btn-place').addEventListener('click', placeBlock);
+
+    function selectBlock(type) {
+        selectedBlockType = type;
+        document.querySelectorAll('.block-opt').forEach((el, i) => {
+            el.classList.toggle('selected', i + 1 === type);
+        });
+    }
+
+    function breakBlock() {
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(blocks);
+        if (intersects.length > 0) {
+            const obj = intersects[0].object;
+            scene.remove(obj);
+            blocks.splice(blocks.indexOf(obj), 1);
+        }
+    }
+
+    function placeBlock() {
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(blocks);
+        if (intersects.length > 0) {
+            const intersect = intersects[0];
+            const newPos = intersect.point.clone().add(intersect.face.normal.clone().multiplyScalar(0.5)).floor().addScalar(0.5);
+            const mesh = new THREE.Mesh(blockGeo, materials[selectedBlockType]);
+            mesh.position.copy(newPos);
+            scene.add(mesh);
+            blocks.push(mesh);
+        }
+    }
+
+    // Ekranı Döndürme (Dokunmatik Kamera)
+    let touchX = 0, touchY = 0;
+    window.addEventListener('touchstart', e => {
+        if(e.touches.length === 1 && e.touches[0].clientX > window.innerWidth / 2) {
+            touchX = e.touches[0].clientX;
+            touchY = e.touches[0].clientY;
+        }
+    });
+    window.addEventListener('touchmove', e => {
+        if(e.touches.length === 1 && e.touches[0].clientX > window.innerWidth / 2) {
+            const deltaX = e.touches[0].clientX - touchX;
+            camera.rotation.y -= deltaX * 0.005;
+            touchX = e.touches[0].clientX;
+            touchY = e.touches[0].clientY;
+        }
+    });
+
+    // Oyun Döngüsü
+    function animate() {
+        requestAnimationFrame(animate);
+
+        const speed = 0.1;
+        if (moveForward) camera.translateZ(-speed);
+        if (moveBackward) camera.translateZ(speed);
+        if (moveLeft) camera.translateX(-speed);
+        if (moveRight) camera.translateX(speed);
+
+        renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
 </script>
 
 </body>
