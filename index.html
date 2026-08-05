@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Minecraft Web</title>
+    <title>3D Minecraft AI Survival</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
         body { overflow: hidden; font-family: sans-serif; background-color: #000; }
@@ -11,16 +11,22 @@
             position: absolute;
             top: 50%;
             left: 50%;
-            width: 10px;
-            height: 10px;
-            margin-top: -5px;
-            margin-left: -5px;
-            pointer-events: none;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            transform: translate(-50%, -50%);
             color: white;
-            font-size: 20px;
+            font-size: 24px;
+            pointer-events: none;
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            background: rgba(0,0,0,0.6);
+            padding: 10px 15px;
+            border-radius: 8px;
+            pointer-events: none;
         }
         #instructions {
             position: absolute;
@@ -29,24 +35,28 @@
             transform: translate(-50%, -50%);
             color: white;
             text-align: center;
-            background: rgba(0,0,0,0.8);
-            padding: 20px;
-            border-radius: 8px;
+            background: rgba(0,0,0,0.85);
+            padding: 25px;
+            border-radius: 12px;
             cursor: pointer;
+            border: 1px solid #444;
         }
     </style>
-    <!-- 3D Grafik Kütüphanesi -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
 <div id="crosshair">+</div>
+<div id="ui">Can: <span id="health" style="color: #ef4444;">100</span></div>
+
 <div id="instructions">
     <h2>Oyuna Başlamak İçin Tıkla</h2>
+    <br>
     <p><b>W, A, S, D</b>: Hareket Et</p>
     <p><b>Sol Tık</b>: Blok Kır</p>
     <p><b>Sağ Tık</b>: Blok Koy</p>
-    <p><b>ESC</b>: Fareyi Serbest Bırak</p>
+    <br>
+    <p style="color: #ef4444;"><b>Dikkat:</b> Kırmızı AI seni takip edip saldırmaya çalışacak!</p>
 </div>
 
 <script>
@@ -54,53 +64,62 @@
     let controlsEnabled = false;
     let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
     let yaw = 0, pitch = 0;
-    const objects = [];
+    
+    const blocks = [];
     const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-
+    
+    let playerHealth = 100;
+    let aiMesh;
+    const aiSpeed = 0.04;
+    
     const instructions = document.getElementById('instructions');
+    const healthEl = document.getElementById('health');
 
     function init() {
         scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x87ceeb); // Gökyüzü rengi
+        scene.background = new THREE.Color(0x87ceeb);
 
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 3, 10);
+        camera.position.set(0, 2, 8);
 
-        // Işıklandırma
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-        scene.add(ambientLight);
-
+        // Işıklar
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
         const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        dirLight.position.set(20, 40, 20);
+        dirLight.position.set(10, 30, 10);
         scene.add(dirLight);
 
-        // Blok Materyalleri
+        // Materyaller
         const blockGeo = new THREE.BoxGeometry(1, 1, 1);
-        const greenMat = new THREE.MeshLambertMaterial({ color: 0x4caf50 });
+        const grassMat = new THREE.MeshLambertMaterial({ color: 0x4caf50 });
         const dirtMat = new THREE.MeshLambertMaterial({ color: 0x795548 });
 
-        // Harita Oluşturma (16x16 zemin)
-        for (let x = -8; x < 8; x++) {
-            for (let z = -8; z < 8; z++) {
-                const block = new THREE.Mesh(blockGeo, greenMat);
+        // World Generation
+        for (let x = -10; x < 10; x++) {
+            for (let z = -10; z < 10; z++) {
+                const block = new THREE.Mesh(blockGeo, grassMat);
                 block.position.set(x, 0, z);
                 scene.add(block);
-                objects.push(block);
+                blocks.push(block);
 
-                // Altına toprak katmanı
                 const subBlock = new THREE.Mesh(blockGeo, dirtMat);
                 subBlock.position.set(x, -1, z);
                 scene.add(subBlock);
-                objects.push(subBlock);
+                blocks.push(subBlock);
             }
         }
+
+        // Yapay Zeka (AI) Karakteri Oluşturma
+        const aiGeo = new THREE.BoxGeometry(0.8, 1.8, 0.8);
+        const aiMat = new THREE.MeshLambertMaterial({ color: 0xef4444 });
+        aiMesh = new THREE.Mesh(aiGeo, aiMat);
+        aiMesh.position.set(-8, 1.4, -8);
+        scene.add(aiMesh);
 
         renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
-        // Kontroller ve Etkileşimler
+        // Kontroller
         instructions.addEventListener('click', () => {
             document.body.requestPointerLock();
         });
@@ -117,8 +136,8 @@
 
         document.addEventListener('mousemove', (e) => {
             if (!controlsEnabled) return;
-            yaw -= e.movementX * 0.002;
-            pitch -= e.movementY * 0.002;
+            yaw -= e.movementX * 0.0025;
+            pitch -= e.movementY * 0.0025;
             pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, pitch));
         });
 
@@ -140,44 +159,64 @@
             if (!controlsEnabled) return;
 
             raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-            const intersects = raycaster.intersectObjects(objects);
+            const intersects = raycaster.intersectObjects(blocks);
 
             if (intersects.length > 0) {
                 const intersect = intersects[0];
                 
-                // Sol Tık (0): Blok Kır
+                // Sol Tık: Kır
                 if (e.button === 0) {
                     scene.remove(intersect.object);
-                    objects.splice(objects.indexOf(intersect.object), 1);
+                    blocks.splice(blocks.indexOf(intersect.object), 1);
                 } 
-                // Sağ Tık (2): Blok Koy
+                // Sağ Tık: Koy
                 else if (e.button === 2) {
-                    const newBlock = new THREE.Mesh(blockGeo, greenMat);
+                    const newBlock = new THREE.Mesh(blockGeo, grassMat);
                     newBlock.position.copy(intersect.object.position).add(intersect.face.normal);
                     scene.add(newBlock);
-                    objects.push(newBlock);
+                    blocks.push(newBlock);
                 }
             }
         });
 
-        window.addEventListener('resize', onWindowResize);
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
     }
 
-    function onWindowResize() {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
+    function updateAI() {
+        if (!aiMesh || playerHealth <= 0) return;
+
+        // AI'ın oyuncuya olan yönünü hesapla
+        const targetPos = new THREE.Vector3(camera.position.x, aiMesh.position.y, camera.position.z);
+        const dir = new THREE.Vector3().subVectors(targetPos, aiMesh.position);
+        const dist = dir.length();
+
+        if (dist > 0.8) {
+            dir.normalize();
+            aiMesh.position.addScaledVector(dir, aiSpeed);
+            aiMesh.lookAt(targetPos);
+        } else {
+            // Yakındaysa oyuncunun canını düşür
+            playerHealth -= 0.5;
+            healthEl.textContent = Math.max(0, Math.floor(playerHealth));
+            if (playerHealth <= 0) {
+                alert("Yapay Zeka Seni Yakaladı! Oyunu Kaybettin.");
+                location.reload();
+            }
+        }
     }
 
     function animate() {
         requestAnimationFrame(animate);
 
         if (controlsEnabled) {
-            // Kamera Yönü Hareketi
             const euler = new THREE.Euler(pitch, yaw, 0, 'YXZ');
             camera.quaternion.setFromEuler(euler);
 
-            const speed = 0.1;
+            const speed = 0.08;
             const dir = new THREE.Vector3();
 
             if (moveForward) dir.z -= 1;
@@ -187,9 +226,11 @@
 
             dir.normalize();
             dir.applyQuaternion(camera.quaternion);
-            dir.y = 0; // Uçmayı engelle, zeminde yürü
+            dir.y = 0;
 
             camera.position.addScaledVector(dir, speed);
+            
+            updateAI();
         }
 
         renderer.render(scene, camera);
