@@ -2,202 +2,200 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Minecraft Web Edition</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Server Panel</title>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
-        body { overflow: hidden; font-family: sans-serif; background: #000; }
-        #canvas-container { width: 100vw; height: 100vh; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            width: 100%;
+            max-width: 500px;
+            background: #1e293b;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            border: 1px solid #334155;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            font-size: 22px;
+            color: #38bdf8;
+            margin-bottom: 5px;
+        }
+        .status-card {
+            background: #0f172a;
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            border: 1px solid #334155;
+        }
+        .status-info { display: flex; align-items: center; gap: 10px; }
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #ef4444; /* Kapalı: Kırmızı */
+        }
+        .status-dot.online { background-color: #22c55e; } /* Açık: Yeşil */
+        .status-dot.starting { background-color: #eab308; } /* Başlatılıyor: Sarı */
         
-        /* Crosshair */
-        #crosshair {
-            position: absolute; top: 50%; left: 50%;
-            width: 14px; height: 14px;
-            transform: translate(-50%, -50%);
-            pointer-events: none;
+        .ip-box {
+            background: #0f172a;
+            padding: 12px 16px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border: 1px dashed #38bdf8;
         }
-        #crosshair::before, #crosshair::after {
-            content: ''; position: absolute; background: white;
+        .ip-text { font-family: monospace; font-size: 15px; color: #f8fafc; }
+        .copy-btn {
+            background: #38bdf8;
+            color: #0f172a;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 12px;
         }
-        #crosshair::before { top: 6px; left: 0; width: 14px; height: 2px; }
-        #crosshair::after { top: 0; left: 6px; width: 2px; height: 14px; }
-
-        /* Mobil Kontroller */
-        .touch-btn {
-            position: absolute; background: rgba(0,0,0,0.5); border: 2px solid #fff;
-            border-radius: 50%; color: white; display: flex; align-items: center;
-            justify-content: center; font-weight: bold; font-size: 18px; touch-action: manipulation;
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
         }
-        #btn-up { bottom: 110px; left: 70px; width: 50px; height: 50px; }
-        #btn-down { bottom: 10px; left: 70px; width: 50px; height: 50px; }
-        #btn-left { bottom: 60px; left: 20px; width: 50px; height: 50px; }
-        #btn-right { bottom: 60px; left: 120px; width: 50px; height: 50px; }
+        .btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .btn-start { background: #22c55e; }
+        .btn-start:hover { background: #16a34a; }
+        .btn-stop { background: #ef4444; }
+        .btn-stop:hover { background: #dc2626; }
+        .btn-restart { background: #eab308; }
+        .btn-restart:hover { background: #ca8a04; }
         
-        #btn-break { bottom: 80px; right: 90px; width: 60px; height: 60px; background: rgba(220,38,38,0.7); }
-        #btn-place { bottom: 80px; right: 20px; width: 60px; height: 60px; background: rgba(22,163,74,0.7); }
-        
-        #block-select {
-            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
-            display: flex; gap: 10px; background: rgba(0,0,0,0.6); padding: 5px; border-radius: 8px;
+        .console {
+            background: #000;
+            border-radius: 8px;
+            padding: 12px;
+            font-family: monospace;
+            font-size: 12px;
+            color: #4ade80;
+            height: 120px;
+            overflow-y: auto;
+            border: 1px solid #334155;
         }
-        .block-opt {
-            width: 35px; height: 35px; border: 2px solid transparent; cursor: pointer; border-radius: 4px;
-        }
-        .block-opt.selected { border-color: yellow; }
     </style>
-    <!-- 3D Kütüphanesi (Three.js) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
-<div id="crosshair"></div>
-<div id="canvas-container"></div>
+<div class="container">
+    <div class="header">
+        <h1>🎮 Sunucu Paneli</h1>
+        <p style="font-size: 13px; color: #94a3b8;">Bedrock Edition Survival Server</p>
+    </div>
 
-<!-- Blok Seçimi -->
-<div id="block-select">
-    <div class="block-opt selected" style="background: #557a2b;" onclick="selectBlock(1)"></div>
-    <div class="block-opt" style="background: #8b5a2b;" onclick="selectBlock(2)"></div>
-    <div class="block-opt" style="background: #808080;" onclick="selectBlock(3)"></div>
+    <div class="status-card">
+        <div class="status-info">
+            <div id="statusDot" class="status-dot"></div>
+            <span id="statusText" style="font-weight: bold;">Sunucu Kapalı</span>
+        </div>
+        <span id="playerCount" style="font-size: 13px; color: #94a3b8;">Oyuncu: 0/20</span>
+    </div>
+
+    <div class="ip-box">
+        <span class="ip-text" id="serverIP">play.aternos.me:19132</span>
+        <button class="copy-btn" onclick="copyIP()">KOPYALA</button>
+    </div>
+
+    <div class="btn-group">
+        <button class="btn btn-start" onclick="startServer()">Başlat</button>
+        <button class="btn btn-restart" onclick="restartServer()">Yeniden Başlat</button>
+        <button class="btn btn-stop" onclick="stopServer()">Durdur</button>
+    </div>
+
+    <div class="console" id="consoleLog">
+        > Panel hazır.<br>
+        > Komut bekleniyor...
+    </div>
 </div>
 
-<!-- Dokunmatik Tuşlar -->
-<div class="touch-btn" id="btn-up">▲</div>
-<div class="touch-btn" id="btn-down">▼</div>
-<div class="touch-btn" id="btn-left">◄</div>
-<div class="touch-btn" id="btn-right">►</div>
-
-<div class="touch-btn" id="btn-break">KIR</div>
-<div class="touch-btn" id="btn-place">KOY</div>
-
 <script>
-    // 3D Sahne Kurulumu
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87ceeb); // Gökyüzü Mavisı
-    scene.fog = new THREE.FogExp2(0x87ceeb, 0.03);
+    let isOnline = false;
 
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.getElementById('canvas-container').appendChild(renderer.domElement);
+    function log(msg) {
+        const consoleEl = document.getElementById('consoleLog');
+        consoleEl.innerHTML += `<br>> ${msg}`;
+        consoleEl.scrollTop = consoleEl.scrollHeight;
+    }
 
-    // Işıklandırma
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-    scene.add(ambientLight);
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
-    dirLight.position.set(20, 40, 20);
-    scene.add(dirLight);
-
-    // Blok Materyalleri
-    const materials = {
-        1: new THREE.MeshLambertMaterial({ color: 0x557a2b }), // Çim
-        2: new THREE.MeshLambertMaterial({ color: 0x8b5a2b }), // Toprak
-        3: new THREE.MeshLambertMaterial({ color: 0x808080 })  // Taş
-    };
-    const blockGeo = new THREE.BoxGeometry(1, 1, 1);
-    const blocks = [];
-    let selectedBlockType = 1;
-
-    // Harita Oluşturma (16x16 Dünya)
-    for (let x = -8; x < 8; x++) {
-        for (let z = -8; z < 8; z++) {
-            const height = Math.floor(Math.sin(x * 0.3) + Math.cos(z * 0.3)) + 2;
-            for (let y = 0; y < height; y++) {
-                const type = y === height - 1 ? 1 : (y > height - 3 ? 2 : 3);
-                const mesh = new THREE.Mesh(blockGeo, materials[type]);
-                mesh.position.set(x, y, z);
-                scene.add(mesh);
-                blocks.push(mesh);
-            }
+    function startServer() {
+        if (isOnline) {
+            log("Sunucu zaten açık!");
+            return;
         }
+        log("Sunucu başlatılıyor...");
+        document.getElementById('statusDot').className = "status-dot starting";
+        document.getElementById('statusText').innerText = "Başlatılıyor...";
+
+        setTimeout(() => {
+            isOnline = true;
+            document.getElementById('statusDot').className = "status-dot online";
+            document.getElementById('statusText').innerText = "Sunucu Açık";
+            document.getElementById('playerCount').innerText = "Oyuncu: 1/20";
+            log("Sunucu başarıyla açıldı! (Port: 19132)");
+        }, 3000);
     }
 
-    camera.position.set(0, 5, 5);
-
-    // Kontroller & Hareket
-    let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2(0, 0);
-
-    function bindBtn(id, setVal) {
-        const el = document.getElementById(id);
-        el.addEventListener('touchstart', (e) => { e.preventDefault(); setVal(true); });
-        el.addEventListener('touchend', (e) => { e.preventDefault(); setVal(false); });
-    }
-
-    bindBtn('btn-up', v => moveForward = v);
-    bindBtn('btn-down', v => moveBackward = v);
-    bindBtn('btn-left', v => moveLeft = v);
-    bindBtn('btn-right', v => moveRight = v);
-
-    document.getElementById('btn-break').addEventListener('click', breakBlock);
-    document.getElementById('btn-place').addEventListener('click', placeBlock);
-
-    function selectBlock(type) {
-        selectedBlockType = type;
-        document.querySelectorAll('.block-opt').forEach((el, i) => {
-            el.classList.toggle('selected', i + 1 === type);
-        });
-    }
-
-    function breakBlock() {
-        raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObjects(blocks);
-        if (intersects.length > 0) {
-            const obj = intersects[0].object;
-            scene.remove(obj);
-            blocks.splice(blocks.indexOf(obj), 1);
+    function stopServer() {
+        if (!isOnline) {
+            log("Sunucu zaten kapalı.");
+            return;
         }
+        log("Sunucu kapatılıyor...");
+        isOnline = false;
+        document.getElementById('statusDot').className = "status-dot";
+        document.getElementById('statusText').innerText = "Sunucu Kapalı";
+        document.getElementById('playerCount').innerText = "Oyuncu: 0/20";
+        log("Sunucu durduruldu.");
     }
 
-    function placeBlock() {
-        raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObjects(blocks);
-        if (intersects.length > 0) {
-            const intersect = intersects[0];
-            const newPos = intersect.point.clone().add(intersect.face.normal.clone().multiplyScalar(0.5)).floor().addScalar(0.5);
-            const mesh = new THREE.Mesh(blockGeo, materials[selectedBlockType]);
-            mesh.position.copy(newPos);
-            scene.add(mesh);
-            blocks.push(mesh);
-        }
+    function restartServer() {
+        log("Yeniden başlatma isteği gönderildi...");
+        stopServer();
+        setTimeout(() => {
+            startServer();
+        }, 1500);
     }
 
-    // Ekranı Döndürme (Dokunmatik Kamera)
-    let touchX = 0, touchY = 0;
-    window.addEventListener('touchstart', e => {
-        if(e.touches.length === 1 && e.touches[0].clientX > window.innerWidth / 2) {
-            touchX = e.touches[0].clientX;
-            touchY = e.touches[0].clientY;
-        }
-    });
-    window.addEventListener('touchmove', e => {
-        if(e.touches.length === 1 && e.touches[0].clientX > window.innerWidth / 2) {
-            const deltaX = e.touches[0].clientX - touchX;
-            camera.rotation.y -= deltaX * 0.005;
-            touchX = e.touches[0].clientX;
-            touchY = e.touches[0].clientY;
-        }
-    });
-
-    // Oyun Döngüsü
-    function animate() {
-        requestAnimationFrame(animate);
-
-        const speed = 0.1;
-        if (moveForward) camera.translateZ(-speed);
-        if (moveBackward) camera.translateZ(speed);
-        if (moveLeft) camera.translateX(-speed);
-        if (moveRight) camera.translateX(speed);
-
-        renderer.render(scene, camera);
+    function copyIP() {
+        const ip = document.getElementById('serverIP').innerText;
+        navigator.clipboard.writeText(ip);
+        alert("Sunucu adresi kopyalandı: " + ip);
     }
-    animate();
-
-    window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-    });
 </script>
 
 </body>
