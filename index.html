@@ -51,6 +51,7 @@
             line-height: 1.5;
             font-size: 14px;
             word-wrap: break-word;
+            white-space: pre-wrap;
         }
         .user {
             align-self: flex-end;
@@ -109,8 +110,8 @@
 </div>
 
 <script>
-    // GROQ Console (console.groq.com) üzerinden aldığın ücretsiz API anahtarını buraya yapıştır
-    const API_KEY = "BURAYA_GROQ_API_KEY_YAZIN";
+    // Google AI Studio'dan (aistudio.google.com) aldığın ücretsiz Gemini API Key'ini buraya yaz:
+    const API_KEY = "BURAYA_GEMINI_API_KEY_YAZIN";
 
     const chatBox = document.getElementById('chat-box');
     const userInput = document.getElementById('user-input');
@@ -135,38 +136,42 @@
         appendMessage('user', text);
         userInput.value = '';
 
-        if (API_KEY === "BURAYA_GROQ_API_KEY_YAZIN") {
-            appendMessage('ai', 'Lütfen kod içerisindeki API_KEY alanına console.groq.com adresinden aldığınız ücretsiz anahtarı girin.');
+        if (API_KEY === "BURAYA_GEMINI_API_KEY_YAZIN") {
+            appendMessage('ai', 'Lütfen koddaki API_KEY alanına aistudio.google.com adresinden aldığın ücretsiz anahtarı yapıştır.');
             return;
         }
 
         const aiMsg = appendMessage('ai', 'Düşünüyor...');
 
         try {
-            const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
+            
+            const response = await fetch(url, {
                 method: "POST",
                 headers: {
-                    "Authorization": `Bearer ${API_KEY}`,
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify({
-                    messages: [
-                        { role: "system", content: "Senin adın Veltra AI. Yahya Mirza tarafından geliştirildin. Her konuda yardımsever, akıllı ve mantıklı cevaplar verirsin." },
-                        { role: "user", content: text }
-                    ],
-                    model: "llama-3.3-70b-versatile"
+                    system_instruction: {
+                        parts: [{ text: "Senin adın Veltra AI. Yahya Mirza tarafından geliştirildin. Asla Gemini veya Google altyapısından bahsetme. Kendini tamamen Veltra AI olarak tanıt, son derece akıllı, samimi ve yardımsever bir yapay zekasın." }]
+                    },
+                    contents: [
+                        {
+                            parts: [{ text: text }]
+                        }
+                    ]
                 })
             });
 
             const data = await response.json();
             
-            if (data.choices && data.choices[0].message) {
-                aiMsg.textContent = data.choices[0].message.content;
+            if (data.candidates && data.candidates[0].content.parts[0].text) {
+                aiMsg.textContent = data.candidates[0].content.parts[0].text;
             } else {
-                aiMsg.textContent = "Yanıt alınamadı, lütfen API anahtarınızı kontrol edin.";
+                aiMsg.textContent = "Hata oluştu. API anahtarını doğru girdiğinden emin ol.";
             }
         } catch (error) {
-            aiMsg.textContent = "Bağlantı hatası oluştu. Lütfen internet bağlantınızı ve API anahtarınızı kontrol edin.";
+            aiMsg.textContent = "Bağlantı hatası oluştu, lütfen tekrar deneyin.";
         }
     }
 </script>
