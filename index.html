@@ -3,257 +3,200 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2D Block Builder</title>
+    <title>3D Minecraft Web</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
-        body {
-            background-color: #0f172a;
-            color: #f8fafc;
-            font-family: sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            overflow: hidden;
-        }
-        #game-container { position: relative; border-radius: 8px; overflow: hidden; }
-        canvas { background-color: #38bdf8; display: block; }
-        #hotbar {
+        body { overflow: hidden; font-family: sans-serif; background-color: #000; }
+        #crosshair {
             position: absolute;
-            bottom: 10px;
+            top: 50%;
             left: 50%;
-            transform: translateX(-50%);
+            width: 10px;
+            height: 10px;
+            margin-top: -5px;
+            margin-left: -5px;
+            pointer-events: none;
             display: flex;
-            gap: 10px;
-            background: rgba(15, 23, 42, 0.8);
-            padding: 8px;
-            border-radius: 8px;
-            border: 1px solid #334155;
-        }
-        .slot {
-            width: 45px;
-            height: 45px;
-            border: 2px solid #475569;
-            border-radius: 6px;
-            display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
-            font-size: 11px;
-            font-weight: bold;
+            color: white;
+            font-size: 20px;
+        }
+        #instructions {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            text-align: center;
+            background: rgba(0,0,0,0.8);
+            padding: 20px;
+            border-radius: 8px;
             cursor: pointer;
         }
-        .slot.active { border-color: #f59e0b; background: rgba(245, 158, 11, 0.2); }
-        .color-box { width: 16px; height: 16px; border-radius: 2px; margin-bottom: 2px; }
-        #controls { margin-top: 10px; font-size: 13px; color: #94a3b8; text-align: center; }
     </style>
+    <!-- 3D Grafik Kütüphanesi -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
-<div id="game-container">
-    <canvas id="gameCanvas" width="800" height="500"></canvas>
-    <div id="hotbar">
-        <div class="slot active" id="slot-1" onclick="selectSlot(1)">
-            <div class="color-box" style="background: #16a34a;"></div>
-            <span id="count-1">0</span>
-        </div>
-        <div class="slot" id="slot-2" onclick="selectSlot(2)">
-            <div class="color-box" style="background: #854d0e;"></div>
-            <span id="count-2">0</span>
-        </div>
-        <div class="slot" id="slot-3" onclick="selectSlot(3)">
-            <div class="color-box" style="background: #64748b;"></div>
-            <span id="count-3">0</span>
-        </div>
-    </div>
-</div>
-<div id="controls">
-    Kontroller: <b>A / D</b>: Hareket | <b>W / Boşluk</b>: Zıpla | <b>Sol Tık</b>: Blok Kır | <b>Sağ Tık</b>: Blok Koy | <b>1, 2, 3</b>: Envanter Seç
+<div id="crosshair">+</div>
+<div id="instructions">
+    <h2>Oyuna Başlamak İçin Tıkla</h2>
+    <p><b>W, A, S, D</b>: Hareket Et</p>
+    <p><b>Sol Tık</b>: Blok Kır</p>
+    <p><b>Sağ Tık</b>: Blok Koy</p>
+    <p><b>ESC</b>: Fareyi Serbest Bırak</p>
 </div>
 
 <script>
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
+    let camera, scene, renderer;
+    let controlsEnabled = false;
+    let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+    let yaw = 0, pitch = 0;
+    const objects = [];
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
 
-    const BLOCK_SIZE = 25;
-    const COLS = canvas.width / BLOCK_SIZE;
-    const ROWS = canvas.height / BLOCK_SIZE;
+    const instructions = document.getElementById('instructions');
 
-    // 0: Hava, 1: Çim, 2: Toprak, 3: Taş
-    const BLOCK_COLORS = { 1: '#16a34a', 2: '#854d0e', 3: '#64748b' };
-    
-    let grid = Array(ROWS).fill(null).map(() => Array(COLS).fill(0));
-    let inventory = { 1: 0, 2: 0, 3: 0 };
-    let selectedSlot = 1;
+    function init() {
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb); // Gökyüzü rengi
 
-    const player = {
-        x: 100, y: 100,
-        w: 18, h: 36,
-        vx: 0, vy: 0,
-        speed: 3, jumpPower: -8,
-        grounded: false
-    };
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 3, 10);
 
-    const keys = {};
+        // Işıklandırma
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
 
-    function generateWorld() {
-        const surfaceRow = 12;
-        for (let r = 0; r < ROWS; r++) {
-            for (let c = 0; c < COLS; c++) {
-                if (r === surfaceRow) grid[r][c] = 1;
-                else if (r > surfaceRow && r < surfaceRow + 4) grid[r][c] = 2;
-                else if (r >= surfaceRow + 4) grid[r][c] = 3;
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(20, 40, 20);
+        scene.add(dirLight);
+
+        // Blok Materyalleri
+        const blockGeo = new THREE.BoxGeometry(1, 1, 1);
+        const greenMat = new THREE.MeshLambertMaterial({ color: 0x4caf50 });
+        const dirtMat = new THREE.MeshLambertMaterial({ color: 0x795548 });
+
+        // Harita Oluşturma (16x16 zemin)
+        for (let x = -8; x < 8; x++) {
+            for (let z = -8; z < 8; z++) {
+                const block = new THREE.Mesh(blockGeo, greenMat);
+                block.position.set(x, 0, z);
+                scene.add(block);
+                objects.push(block);
+
+                // Altına toprak katmanı
+                const subBlock = new THREE.Mesh(blockGeo, dirtMat);
+                subBlock.position.set(x, -1, z);
+                scene.add(subBlock);
+                objects.push(subBlock);
             }
         }
-    }
 
-    function selectSlot(num) {
-        selectedSlot = num;
-        document.querySelectorAll('.slot').forEach(el => el.classList.remove('active'));
-        document.getElementById(`slot-${num}`).classList.add('active');
-    }
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
 
-    window.addEventListener('keydown', e => {
-        keys[e.key.toLowerCase()] = true;
-        if (['1', '2', '3'].includes(e.key)) selectSlot(parseInt(e.key));
-    });
-    window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+        // Kontroller ve Etkileşimler
+        instructions.addEventListener('click', () => {
+            document.body.requestPointerLock();
+        });
 
-    canvas.addEventListener('contextmenu', e => e.preventDefault());
+        document.addEventListener('pointerlockchange', () => {
+            if (document.pointerLockElement === document.body) {
+                controlsEnabled = true;
+                instructions.style.display = 'none';
+            } else {
+                controlsEnabled = false;
+                instructions.style.display = 'block';
+            }
+        });
 
-    canvas.addEventListener('mousedown', e => {
-        const rect = canvas.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
+        document.addEventListener('mousemove', (e) => {
+            if (!controlsEnabled) return;
+            yaw -= e.movementX * 0.002;
+            pitch -= e.movementY * 0.002;
+            pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, pitch));
+        });
 
-        const col = Math.floor(mouseX / BLOCK_SIZE);
-        const row = Math.floor(mouseY / BLOCK_SIZE);
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'KeyW') moveForward = true;
+            if (e.code === 'KeyS') moveBackward = true;
+            if (e.code === 'KeyA') moveLeft = true;
+            if (e.code === 'KeyD') moveRight = true;
+        });
 
-        if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return;
+        document.addEventListener('keyup', (e) => {
+            if (e.code === 'KeyW') moveForward = false;
+            if (e.code === 'KeyS') moveBackward = false;
+            if (e.code === 'KeyA') moveLeft = false;
+            if (e.code === 'KeyD') moveRight = false;
+        });
 
-        // Sol tık (0): Blok kır
-        if (e.button === 0 && grid[row][col] !== 0) {
-            const blockType = grid[row][col];
-            inventory[blockType]++;
-            grid[row][col] = 0;
-            updateUI();
-        } 
-        // Sağ tık (2): Blok koy
-        else if (e.button === 2 && grid[row][col] === 0) {
-            if (inventory[selectedSlot] > 0) {
-                // Oyuncunun durduğu yere koymayı engelle
-                const pColStart = Math.floor(player.x / BLOCK_SIZE);
-                const pColEnd = Math.floor((player.x + player.w) / BLOCK_SIZE);
-                const pRowStart = Math.floor(player.y / BLOCK_SIZE);
-                const pRowEnd = Math.floor((player.y + player.h) / BLOCK_SIZE);
+        document.addEventListener('mousedown', (e) => {
+            if (!controlsEnabled) return;
 
-                if (!(col >= pColStart && col <= pColEnd && row >= pRowStart && row <= pRowEnd)) {
-                    grid[row][col] = selectedSlot;
-                    inventory[selectedSlot]--;
-                    updateUI();
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const intersects = raycaster.intersectObjects(objects);
+
+            if (intersects.length > 0) {
+                const intersect = intersects[0];
+                
+                // Sol Tık (0): Blok Kır
+                if (e.button === 0) {
+                    scene.remove(intersect.object);
+                    objects.splice(objects.indexOf(intersect.object), 1);
+                } 
+                // Sağ Tık (2): Blok Koy
+                else if (e.button === 2) {
+                    const newBlock = new THREE.Mesh(blockGeo, greenMat);
+                    newBlock.position.copy(intersect.object.position).add(intersect.face.normal);
+                    scene.add(newBlock);
+                    objects.push(newBlock);
                 }
             }
-        }
-    });
+        });
 
-    function updateUI() {
-        document.getElementById('count-1').textContent = inventory[1];
-        document.getElementById('count-2').textContent = inventory[2];
-        document.getElementById('count-3').textContent = inventory[3];
+        window.addEventListener('resize', onWindowResize);
     }
 
-    function isSolid(r, c) {
-        if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return false;
-        return grid[r][c] !== 0;
+    function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
     }
 
-    function update() {
-        // Yatay hareket
-        player.vx = 0;
-        if (keys['a'] || keys['arrowleft']) player.vx = -player.speed;
-        if (keys['d'] || keys['arrowright']) player.vx = player.speed;
+    function animate() {
+        requestAnimationFrame(animate);
 
-        // Zıplama
-        if ((keys['w'] || keys['arrowup'] || keys[' ']) && player.grounded) {
-            player.vy = player.jumpPower;
-            player.grounded = false;
+        if (controlsEnabled) {
+            // Kamera Yönü Hareketi
+            const euler = new THREE.Euler(pitch, yaw, 0, 'YXZ');
+            camera.quaternion.setFromEuler(euler);
+
+            const speed = 0.1;
+            const dir = new THREE.Vector3();
+
+            if (moveForward) dir.z -= 1;
+            if (moveBackward) dir.z += 1;
+            if (moveLeft) dir.x -= 1;
+            if (moveRight) dir.x += 1;
+
+            dir.normalize();
+            dir.applyQuaternion(camera.quaternion);
+            dir.y = 0; // Uçmayı engelle, zeminde yürü
+
+            camera.position.addScaledVector(dir, speed);
         }
 
-        // Fizik & Çarpışma (Yatay)
-        player.x += player.vx;
-        let c1 = Math.floor(player.x / BLOCK_SIZE);
-        let c2 = Math.floor((player.x + player.w) / BLOCK_SIZE);
-        let r1 = Math.floor(player.y / BLOCK_SIZE);
-        let r2 = Math.floor((player.y + player.h - 1) / BLOCK_SIZE);
-
-        if (player.vx > 0 && (isSolid(r1, c2) || isSolid(r2, c2))) {
-            player.x = c2 * BLOCK_SIZE - player.w - 0.1;
-        } else if (player.vx < 0 && (isSolid(r1, c1) || isSolid(r2, c1))) {
-            player.x = (c1 + 1) * BLOCK_SIZE + 0.1;
-        }
-
-        // Yerçekimi
-        player.vy += 0.4;
-        player.y += player.vy;
-
-        // Fizik & Çarpışma (Dikey)
-        c1 = Math.floor(player.x / BLOCK_SIZE);
-        c2 = Math.floor((player.x + player.w) / BLOCK_SIZE);
-        r1 = Math.floor(player.y / BLOCK_SIZE);
-        r2 = Math.floor((player.y + player.h) / BLOCK_SIZE);
-
-        if (player.vy > 0 && (isSolid(r2, c1) || isSolid(r2, c2))) {
-            player.y = r2 * BLOCK_SIZE - player.h;
-            player.vy = 0;
-            player.grounded = true;
-        } else {
-            player.grounded = false;
-        }
-
-        if (player.vy < 0 && (isSolid(r1, c1) || isSolid(r1, c2))) {
-            player.y = (r1 + 1) * BLOCK_SIZE;
-            player.vy = 0;
-        }
-
-        // Düşme sınırı
-        if (player.y > canvas.height) {
-            player.x = 100;
-            player.y = 100;
-            player.vy = 0;
-        }
+        renderer.render(scene, camera);
     }
 
-    function draw() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // Blokları çiz
-        for (let r = 0; r < ROWS; r++) {
-            for (let c = 0; c < COLS; c++) {
-                const type = grid[r][c];
-                if (type !== 0) {
-                    ctx.fillStyle = BLOCK_COLORS[type];
-                    ctx.fillRect(c * BLOCK_SIZE, r * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
-                    ctx.strokeStyle = 'rgba(0,0,0,0.1)';
-                    ctx.strokeRect(c * BLOCK_SIZE, r * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
-                }
-            }
-        }
-
-        // Oyuncu
-        ctx.fillStyle = '#ef4444';
-        ctx.fillRect(player.x, player.y, player.w, player.h);
-    }
-
-    function loop() {
-        update();
-        draw();
-        requestAnimationFrame(loop);
-    }
-
-    generateWorld();
-    updateUI();
-    loop();
+    init();
+    animate();
 </script>
 </body>
 </html>
