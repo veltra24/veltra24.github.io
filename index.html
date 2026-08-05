@@ -2,178 +2,202 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Veltra AI x Yahya Mirza</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Traktör Sürüş Simülatörü</title>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: #0f172a;
-            color: #f8fafc;
+            background-color: #1e293b;
+            color: white;
+            font-family: sans-serif;
+            overflow: hidden;
             display: flex;
-            justify-content: center;
+            flex-direction: column;
             align-items: center;
+            justify-content: center;
             height: 100vh;
         }
-        #chat-container {
-            width: 100%;
-            max-width: 650px;
-            height: 85vh;
-            background: #1e293b;
-            border-radius: 12px;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-            border: 1px solid #334155;
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background: #87CEEB; /* Gökyüzü */
             overflow: hidden;
         }
-        #header {
-            padding: 16px;
-            background: #0f172a;
-            text-align: center;
-            font-weight: bold;
-            font-size: 18px;
-            border-bottom: 1px solid #334155;
-            color: #38bdf8;
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
         }
-        #chat-box {
-            flex: 1;
-            padding: 20px;
-            overflow-y: auto;
+        /* Mobil Kontroller */
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
             display: flex;
-            flex-direction: column;
-            gap: 12px;
+            justify-content: space-between;
+            padding: 0 20px;
+            box-sizing: border-box;
         }
-        .message {
-            max-width: 80%;
-            padding: 12px 16px;
+        .btn-group { display: flex; gap: 15px; }
+        .btn {
+            width: 70px;
+            height: 70px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid white;
+            border-radius: 50%;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: manipulation;
+        }
+        .btn:active { background: rgba(255, 255, 255, 0.4); }
+        #score-board {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background: rgba(0,0,0,0.5);
+            padding: 10px 20px;
             border-radius: 10px;
-            line-height: 1.5;
-            font-size: 14px;
-            word-wrap: break-word;
-            white-space: pre-wrap;
-        }
-        .user {
-            align-self: flex-end;
-            background: #2563eb;
-            color: white;
-            border-bottom-right-radius: 2px;
-        }
-        .ai {
-            align-self: flex-start;
-            background: #334155;
-            color: #f8fafc;
-            border-bottom-left-radius: 2px;
-        }
-        #input-container {
-            display: flex;
-            padding: 15px;
-            background: #0f172a;
-            gap: 10px;
-            border-top: 1px solid #334155;
-        }
-        input {
-            flex: 1;
-            padding: 12px;
-            border-radius: 8px;
-            border: 1px solid #334155;
-            background: #1e293b;
-            color: white;
-            outline: none;
-            font-size: 14px;
-        }
-        input:focus { border-color: #38bdf8; }
-        button {
-            padding: 12px 20px;
-            background: #38bdf8;
-            color: #0f172a;
-            border: none;
-            border-radius: 8px;
+            font-size: 18px;
             font-weight: bold;
-            cursor: pointer;
-            transition: background 0.2s;
         }
-        button:hover { background: #0284c7; color: white; }
     </style>
 </head>
 <body>
 
-<div id="chat-container">
-    <div id="header">🤖 Veltra AI x Yahya Mirza</div>
-    <div id="chat-box">
-        <div class="message ai">Merhaba! Ben Veltra AI, Yahya Mirza tarafından geliştirildim. Sana nasıl yardımcı olabilirim?</div>
-    </div>
-    <div id="input-container">
-        <input type="text" id="user-input" placeholder="Bir mesaj yazın..." onkeydown="handleKey(event)">
-        <button onclick="sendMessage()">Gönder</button>
+<div id="game-container">
+    <div id="score-board">🚜 Traktör Hızı: <span id="speed">0</span> km/h</div>
+    <canvas id="canvas"></canvas>
+    
+    <div class="controls">
+        <div class="btn-group">
+            <div class="btn" id="left">◄</div>
+            <div class="btn" id="right">►</div>
+        </div>
+        <div class="btn-group">
+            <div class="btn" style="background: #ef4444;" id="brake">Fren</div>
+            <div class="btn" style="background: #22c55e;" id="gas">GAZ</div>
+        </div>
     </div>
 </div>
 
 <script>
-    // Google AI Studio'dan (aistudio.google.com) aldığın ücretsiz Gemini API Key'ini buraya yaz:
-    const API_KEY = "BURAYA_GEMINI_API_KEY_YAZIN";
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const speedText = document.getElementById('speed');
 
-    const chatBox = document.getElementById('chat-box');
-    const userInput = document.getElementById('user-input');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
 
-    function appendMessage(sender, text) {
-        const msg = document.createElement('div');
-        msg.classList.add('message', sender);
-        msg.textContent = text;
-        chatBox.appendChild(msg);
-        chatBox.scrollTop = chatBox.scrollHeight;
-        return msg;
+    let tractor = {
+        x: canvas.width / 2 - 30,
+        y: canvas.height - 180,
+        width: 60,
+        height: 90,
+        speed: 0,
+        maxSpeed: 8,
+        accel: 0.2,
+        friction: 0.05,
+        steer: 0
+    };
+
+    let keys = { left: false, right: false, gas: false, brake: false };
+
+    // Dokunmatik Kontroller
+    const bindTouch = (id, key) => {
+        const el = document.getElementById(id);
+        el.addEventListener('touchstart', (e) => { e.preventDefault(); keys[key] = true; });
+        el.addEventListener('touchend', (e) => { e.preventDefault(); keys[key] = false; });
+        el.addEventListener('mousedown', () => keys[key] = true);
+        el.addEventListener('mouseup', () => keys[key] = false);
+    };
+
+    bindTouch('left', 'left');
+    bindTouch('right', 'right');
+    bindTouch('gas', 'gas');
+    bindTouch('brake', 'brake');
+
+    let roadOffset = 0;
+
+    function drawField() {
+        // Tarla & Yol Çizimi
+        ctx.fillStyle = '#15803d'; // Yeşil çim
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Toprak Yol (Traktör Yolu)
+        ctx.fillStyle = '#78350f';
+        ctx.fillRect(canvas.width / 4, 0, canvas.width / 2, canvas.height);
+
+        // Yol Çizgileri
+        ctx.strokeStyle = '#fef08a';
+        ctx.lineWidth = 6;
+        ctx.setLineDash([20, 20]);
+        ctx.lineDashOffset = -roadOffset;
+        ctx.beginPath();
+        ctx.moveTo(canvas.width / 2, 0);
+        ctx.lineTo(canvas.width / 2, canvas.height);
+        ctx.stroke();
     }
 
-    function handleKey(e) {
-        if (e.key === 'Enter') sendMessage();
+    function drawTractor() {
+        ctx.save();
+        ctx.translate(tractor.x + tractor.width/2, tractor.y + tractor.height/2);
+        
+        // Gövde (Yeşil Traktör)
+        ctx.fillStyle = '#16a34a';
+        ctx.fillRect(-25, -40, 50, 80);
+
+        // Kabin
+        ctx.fillStyle = '#0284c7';
+        ctx.fillRect(-20, -10, 40, 35);
+
+        // Büyük Arka Tekerlekler
+        ctx.fillStyle = '#000';
+        ctx.fillRect(-32, 10, 10, 30);
+        ctx.fillRect(22, 10, 10, 30);
+
+        // Küçük Ön Tekerlekler
+        ctx.fillRect(-30, -35, 8, 20);
+        ctx.fillRect(22, -35, 8, 20);
+
+        // Egzoz
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(10, -35, 5, 10);
+
+        ctx.restore();
     }
 
-    async function sendMessage() {
-        const text = userInput.value.trim();
-        if (!text) return;
-
-        appendMessage('user', text);
-        userInput.value = '';
-
-        if (API_KEY === "BURAYA_GEMINI_API_KEY_YAZIN") {
-            appendMessage('ai', 'Lütfen koddaki API_KEY alanına aistudio.google.com adresinden aldığın ücretsiz anahtarı yapıştır.');
-            return;
+    function update() {
+        // Gaz & Fren
+        if (keys.gas) {
+            if (tractor.speed < tractor.maxSpeed) tractor.speed += tractor.accel;
+        } else if (keys.brake) {
+            if (tractor.speed > -3) tractor.speed -= tractor.accel;
+        } else {
+            if (tractor.speed > 0) tractor.speed -= tractor.friction;
+            if (tractor.speed < 0) tractor.speed += tractor.friction;
+            if (Math.abs(tractor.speed) < 0.1) tractor.speed = 0;
         }
 
-        const aiMsg = appendMessage('ai', 'Düşünüyor...');
+        // Direksiyon
+        if (keys.left && tractor.x > canvas.width / 4) tractor.x -= 4;
+        if (keys.right && tractor.x < (canvas.width / 4 + canvas.width / 2) - tractor.width) tractor.x += 4;
 
-        try {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`;
-            
-            const response = await fetch(url, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    system_instruction: {
-                        parts: [{ text: "Senin adın Veltra AI. Yahya Mirza tarafından geliştirildin. Asla Gemini veya Google altyapısından bahsetme. Kendini tamamen Veltra AI olarak tanıt, son derece akıllı, samimi ve yardımsever bir yapay zekasın." }]
-                    },
-                    contents: [
-                        {
-                            parts: [{ text: text }]
-                        }
-                    ]
-                })
-            });
+        // Yol Hareketi
+        roadOffset += tractor.speed * 2;
+        speedText.innerText = Math.round(tractor.speed * 10);
 
-            const data = await response.json();
-            
-            if (data.candidates && data.candidates[0].content.parts[0].text) {
-                aiMsg.textContent = data.candidates[0].content.parts[0].text;
-            } else {
-                aiMsg.textContent = "Hata oluştu. API anahtarını doğru girdiğinden emin ol.";
-            }
-        } catch (error) {
-            aiMsg.textContent = "Bağlantı hatası oluştu, lütfen tekrar deneyin.";
-        }
+        drawField();
+        drawTractor();
+
+        requestAnimationFrame(update);
     }
+
+    update();
 </script>
 
 </body>
