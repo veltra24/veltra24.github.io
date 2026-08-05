@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Asistan</title>
+    <title>Yapay Zeka Asistanı</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #0f172a;
             color: #f8fafc;
             display: flex;
@@ -17,8 +17,8 @@
         }
         #chat-container {
             width: 100%;
-            max-width: 700px;
-            height: 90vh;
+            max-width: 650px;
+            height: 85vh;
             background: #1e293b;
             border-radius: 12px;
             display: flex;
@@ -98,12 +98,12 @@
 <body>
 
 <div id="chat-container">
-    <div id="header">🤖 Akıllı AI Asistan</div>
+    <div id="header">🤖 Dahili AI Motoru</div>
     <div id="chat-box">
-        <div class="message ai">Merhaba! Ben senin yapay zeka asistanınım. Bana dilediğin soruyu sorabilirsin!</div>
+        <div class="message ai">Merhaba! Ben yerel olarak çalışan yapay zeka asistanınım. Bana soru sorabilir veya sohbet edebilirsin.</div>
     </div>
     <div id="input-container">
-        <input type="text" id="user-input" placeholder="Bir şeyler yazın..." onkeydown="handleKey(event)">
+        <input type="text" id="user-input" placeholder="Bir mesaj yazın..." onkeydown="handleKey(event)">
         <button onclick="sendMessage()">Gönder</button>
     </div>
 </div>
@@ -112,52 +112,64 @@
     const chatBox = document.getElementById('chat-box');
     const userInput = document.getElementById('user-input');
 
+    // Yapay Zeka Bilgi Tabanı ve Mantık Kuralları
+    const knowledgeBase = [
+        { keywords: ["selam", "merhaba", "sa", "hey"], response: "Merhaba! Sana nasıl yardımcı olabilirim?" },
+        { keywords: ["nasılsın", "nasıl gidiyor", "neler yapıyorsun"], response: "Harikayım! Seninle sohbet etmeye ve sorularını yanıtlamaya hazırım." },
+        { keywords: ["adın ne", "kimsin", "sen nesin"], response: "Ben JavaScript ile kodlanmış, doğrudan tarayıcında çalışan yerel bir yapay zeka modeliyim." },
+        { keywords: ["github", "kod", "site"], response: "GitHub Pages üzerinde harika projeler oluşturabilirsin. HTML, CSS ve JS ile siteni yayınlayabilirsin." },
+        { keywords: ["saat", "zaman"], response: () => `Şu anki saat: ${new Date().toLocaleTimeString('tr-TR')}` },
+        { keywords: ["tarih", "gün"], response: () => `Bugünün tarihi: ${new Date().toLocaleDateString('tr-TR')}` },
+        { keywords: ["teşekkür", "eyvallah", "sağol"], response: "Rica ederim! Her zaman yardıma hazırım." },
+        { keywords: ["baybay", "görüşürüz", "hoşçakal"], response: "Görüşmek üzere! Kendine iyi bak." }
+    ];
+
     function appendMessage(sender, text) {
         const msg = document.createElement('div');
         msg.classList.add('message', sender);
         msg.textContent = text;
         chatBox.appendChild(msg);
         chatBox.scrollTop = chatBox.scrollHeight;
-        return msg;
     }
 
     function handleKey(e) {
         if (e.key === 'Enter') sendMessage();
     }
 
-    async function sendMessage() {
+    function generateAIResponse(text) {
+        const cleanText = text.toLowerCase().trim();
+        
+        for (const item of knowledgeBase) {
+            for (const key of item.keywords) {
+                if (cleanText.includes(key)) {
+                    return typeof item.response === 'function' ? item.response() : item.response;
+                }
+            }
+        }
+
+        // Genel yanıtlar (Tanımlı anahtar kelime bulunamazsa)
+        const fallbackResponses = [
+            "Bu konuyu tam anlayamadım, biraz daha detay verebilir misin?",
+            "Anladım, peki bu konuda ne yapmamı istersin?",
+            "İlginç bir soru. Bunu biraz daha açıklar mısın?",
+            "Şu an bu sorguyu işliyorum, başka bir şekilde ifade edebilir misin?"
+        ];
+
+        return fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+    }
+
+    function sendMessage() {
         const text = userInput.value.trim();
         if (!text) return;
 
         appendMessage('user', text);
         userInput.value = '';
 
-        const aiMsg = appendMessage('ai', 'Düşünüyor...');
-
-        try {
-            // Açık kaynaklı AI modeli çağrısı
-            const response = await fetch("https://router.huggingface.co/hf-inference/v1/chat/completions", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    model: "Qwen/Qwen2.5-72B-Instruct",
-                    messages: [{ role: "user", content: text }],
-                    max_tokens: 500
-                })
-            });
-
-            const data = await response.json();
-            
-            if (data.choices && data.choices[0].message) {
-                aiMsg.textContent = data.choices[0].message.content;
-            } else {
-                aiMsg.textContent = "Şu an yanıt üretilemedi, lütfen tekrar dene.";
-            }
-        } catch (error) {
-            aiMsg.textContent = "Bir bağlantı hatası oluştu. Lütfen internetini kontrol et.";
-        }
+        // Düşünme efekti
+        setTimeout(() => {
+            const aiResponse = generateAIResponse(text);
+            appendMessage('ai', aiResponse);
+        }, 400);
     }
 </script>
 
