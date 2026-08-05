@@ -3,18 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Karanlık Orman - Hayatta Kalma</title>
+    <title>2D Block Builder</title>
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            user-select: none;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
         body {
             background-color: #0f172a;
             color: #f8fafc;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -22,227 +17,232 @@
             min-height: 100vh;
             overflow: hidden;
         }
-        #game-container {
-            position: relative;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        canvas {
-            background-color: #1e293b;
-            display: block;
-        }
-        #ui {
+        #game-container { position: relative; border-radius: 8px; overflow: hidden; }
+        canvas { background-color: #38bdf8; display: block; }
+        #hotbar {
             position: absolute;
-            top: 10px;
-            left: 10px;
-            right: 10px;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
             display: flex;
-            justify-content: space-between;
-            font-weight: bold;
-            font-size: 14px;
-            pointer-events: none;
-            text-shadow: 1px 1px 2px black;
-        }
-        .stat {
-            background: rgba(15, 23, 42, 0.7);
-            padding: 6px 12px;
-            border-radius: 6px;
+            gap: 10px;
+            background: rgba(15, 23, 42, 0.8);
+            padding: 8px;
+            border-radius: 8px;
             border: 1px solid #334155;
         }
-        #game-over {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(15, 23, 42, 0.9);
+        .slot {
+            width: 45px;
+            height: 45px;
+            border: 2px solid #475569;
+            border-radius: 6px;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 15px;
-        }
-        button {
-            padding: 10px 20px;
-            font-size: 16px;
+            font-size: 11px;
             font-weight: bold;
-            color: #fff;
-            background-color: #2563eb;
-            border: none;
-            border-radius: 6px;
             cursor: pointer;
-            transition: background 0.2s;
         }
-        button:hover {
-            background-color: #1d4ed8;
-        }
-        .hidden {
-            display: none !important;
-        }
-        #controls {
-            margin-top: 12px;
-            font-size: 13px;
-            color: #94a3b8;
-            text-align: center;
-        }
+        .slot.active { border-color: #f59e0b; background: rgba(245, 158, 11, 0.2); }
+        .color-box { width: 16px; height: 16px; border-radius: 2px; margin-bottom: 2px; }
+        #controls { margin-top: 10px; font-size: 13px; color: #94a3b8; text-align: center; }
     </style>
 </head>
 <body>
 
 <div id="game-container">
     <canvas id="gameCanvas" width="800" height="500"></canvas>
-    <div id="ui">
-        <div class="stat">Can: <span id="health">100</span></div>
-        <div class="stat">Odun: <span id="wood">0</span></div>
-        <div class="stat">Skor: <span id="score">0</span></div>
-    </div>
-    <div id="game-over" class="hidden">
-        <h1 style="color: #ef4444;">Oyun Bitti!</h1>
-        <p>Toplanan Odun: <span id="final-score">0</span></p>
-        <button onclick="resetGame()">Yeniden Başla</button>
+    <div id="hotbar">
+        <div class="slot active" id="slot-1" onclick="selectSlot(1)">
+            <div class="color-box" style="background: #16a34a;"></div>
+            <span id="count-1">0</span>
+        </div>
+        <div class="slot" id="slot-2" onclick="selectSlot(2)">
+            <div class="color-box" style="background: #854d0e;"></div>
+            <span id="count-2">0</span>
+        </div>
+        <div class="slot" id="slot-3" onclick="selectSlot(3)">
+            <div class="color-box" style="background: #64748b;"></div>
+            <span id="count-3">0</span>
+        </div>
     </div>
 </div>
 <div id="controls">
-    Kontroller: <b>W, A, S, D</b> veya <b>Yön Tuşları</b> ile hareket et. Ağaçlara dokunarak odun topla!
+    Kontroller: <b>A / D</b>: Hareket | <b>W / Boşluk</b>: Zıpla | <b>Sol Tık</b>: Blok Kır | <b>Sağ Tık</b>: Blok Koy | <b>1, 2, 3</b>: Envanter Seç
 </div>
 
 <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
-    const healthEl = document.getElementById('health');
-    const woodEl = document.getElementById('wood');
-    const scoreEl = document.getElementById('score');
-    const gameOverEl = document.getElementById('game-over');
-    const finalScoreEl = document.getElementById('final-score');
+    const BLOCK_SIZE = 25;
+    const COLS = canvas.width / BLOCK_SIZE;
+    const ROWS = canvas.height / BLOCK_SIZE;
 
-    let player, keys, trees, enemies, woodCount, score, health, gameOver, spawnTimer;
+    // 0: Hava, 1: Çim, 2: Toprak, 3: Taş
+    const BLOCK_COLORS = { 1: '#16a34a', 2: '#854d0e', 3: '#64748b' };
+    
+    let grid = Array(ROWS).fill(null).map(() => Array(COLS).fill(0));
+    let inventory = { 1: 0, 2: 0, 3: 0 };
+    let selectedSlot = 1;
 
-    function init() {
-        player = { x: 400, y: 250, size: 16, speed: 3 };
-        keys = {};
-        trees = [];
-        enemies = [];
-        woodCount = 0;
-        score = 0;
-        health = 100;
-        gameOver = false;
-        spawnTimer = 0;
+    const player = {
+        x: 100, y: 100,
+        w: 18, h: 36,
+        vx: 0, vy: 0,
+        speed: 3, jumpPower: -8,
+        grounded: false
+    };
 
-        // Başlangıç ağaçları
-        for (let i = 0; i < 8; i++) {
-            spawnTree();
+    const keys = {};
+
+    function generateWorld() {
+        const surfaceRow = 12;
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                if (r === surfaceRow) grid[r][c] = 1;
+                else if (r > surfaceRow && r < surfaceRow + 4) grid[r][c] = 2;
+                else if (r >= surfaceRow + 4) grid[r][c] = 3;
+            }
         }
-
-        updateUI();
     }
 
-    function spawnTree() {
-        trees.push({
-            x: Math.random() * (canvas.width - 40) + 20,
-            y: Math.random() * (canvas.height - 40) + 20,
-            size: 14
-        });
+    function selectSlot(num) {
+        selectedSlot = num;
+        document.querySelectorAll('.slot').forEach(el => el.classList.remove('active'));
+        document.getElementById(`slot-${num}`).classList.add('active');
     }
 
-    function spawnEnemy() {
-        const edge = Math.floor(Math.random() * 4);
-        let x, y;
-        if (edge === 0) { x = Math.random() * canvas.width; y = -20; }
-        else if (edge === 1) { x = canvas.width + 20; y = Math.random() * canvas.height; }
-        else if (edge === 2) { x = Math.random() * canvas.width; y = canvas.height + 20; }
-        else { x = -20; y = Math.random() * canvas.height; }
-
-        enemies.push({ x, y, size: 12, speed: 1.5 + Math.random() * 0.8 });
-    }
-
-    window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+    window.addEventListener('keydown', e => {
+        keys[e.key.toLowerCase()] = true;
+        if (['1', '2', '3'].includes(e.key)) selectSlot(parseInt(e.key));
+    });
     window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 
-    function update() {
-        if (gameOver) return;
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
 
-        // Oyuncu Hareketi
-        if ((keys['w'] || keys['arrowup']) && player.y > player.size) player.y -= player.speed;
-        if ((keys['s'] || keys['arrowdown']) && player.y < canvas.height - player.size) player.y += player.speed;
-        if ((keys['a'] || keys['arrowleft']) && player.x > player.size) player.x -= player.speed;
-        if ((keys['d'] || keys['arrowright']) && player.x < canvas.width - player.size) player.x += player.speed;
+    canvas.addEventListener('mousedown', e => {
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
 
-        // Ağaç Toplama
-        trees.forEach((tree, index) => {
-            const dist = Math.hypot(player.x - tree.x, player.y - tree.y);
-            if (dist < player.size + tree.size) {
-                trees.splice(index, 1);
-                woodCount++;
-                score += 10;
-                updateUI();
-                spawnTree();
+        const col = Math.floor(mouseX / BLOCK_SIZE);
+        const row = Math.floor(mouseY / BLOCK_SIZE);
+
+        if (row < 0 || row >= ROWS || col < 0 || col >= COLS) return;
+
+        // Sol tık (0): Blok kır
+        if (e.button === 0 && grid[row][col] !== 0) {
+            const blockType = grid[row][col];
+            inventory[blockType]++;
+            grid[row][col] = 0;
+            updateUI();
+        } 
+        // Sağ tık (2): Blok koy
+        else if (e.button === 2 && grid[row][col] === 0) {
+            if (inventory[selectedSlot] > 0) {
+                // Oyuncunun durduğu yere koymayı engelle
+                const pColStart = Math.floor(player.x / BLOCK_SIZE);
+                const pColEnd = Math.floor((player.x + player.w) / BLOCK_SIZE);
+                const pRowStart = Math.floor(player.y / BLOCK_SIZE);
+                const pRowEnd = Math.floor((player.y + player.h) / BLOCK_SIZE);
+
+                if (!(col >= pColStart && col <= pColEnd && row >= pRowStart && row <= pRowEnd)) {
+                    grid[row][col] = selectedSlot;
+                    inventory[selectedSlot]--;
+                    updateUI();
+                }
             }
-        });
+        }
+    });
 
-        // Düşman Mantığı ve Çarpışma
-        spawnTimer++;
-        if (spawnTimer % 120 === 0) {
-            spawnEnemy();
+    function updateUI() {
+        document.getElementById('count-1').textContent = inventory[1];
+        document.getElementById('count-2').textContent = inventory[2];
+        document.getElementById('count-3').textContent = inventory[3];
+    }
+
+    function isSolid(r, c) {
+        if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return false;
+        return grid[r][c] !== 0;
+    }
+
+    function update() {
+        // Yatay hareket
+        player.vx = 0;
+        if (keys['a'] || keys['arrowleft']) player.vx = -player.speed;
+        if (keys['d'] || keys['arrowright']) player.vx = player.speed;
+
+        // Zıplama
+        if ((keys['w'] || keys['arrowup'] || keys[' ']) && player.grounded) {
+            player.vy = player.jumpPower;
+            player.grounded = false;
         }
 
-        enemies.forEach((enemy, index) => {
-            const angle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
-            enemy.x += Math.cos(angle) * enemy.speed;
-            enemy.y += Math.sin(angle) * enemy.speed;
+        // Fizik & Çarpışma (Yatay)
+        player.x += player.vx;
+        let c1 = Math.floor(player.x / BLOCK_SIZE);
+        let c2 = Math.floor((player.x + player.w) / BLOCK_SIZE);
+        let r1 = Math.floor(player.y / BLOCK_SIZE);
+        let r2 = Math.floor((player.y + player.h - 1) / BLOCK_SIZE);
 
-            const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
-            if (dist < player.size + enemy.size) {
-                health -= 10;
-                enemies.splice(index, 1);
-                updateUI();
-                if (health <= 0) endGame();
-            }
-        });
+        if (player.vx > 0 && (isSolid(r1, c2) || isSolid(r2, c2))) {
+            player.x = c2 * BLOCK_SIZE - player.w - 0.1;
+        } else if (player.vx < 0 && (isSolid(r1, c1) || isSolid(r2, c1))) {
+            player.x = (c1 + 1) * BLOCK_SIZE + 0.1;
+        }
+
+        // Yerçekimi
+        player.vy += 0.4;
+        player.y += player.vy;
+
+        // Fizik & Çarpışma (Dikey)
+        c1 = Math.floor(player.x / BLOCK_SIZE);
+        c2 = Math.floor((player.x + player.w) / BLOCK_SIZE);
+        r1 = Math.floor(player.y / BLOCK_SIZE);
+        r2 = Math.floor((player.y + player.h) / BLOCK_SIZE);
+
+        if (player.vy > 0 && (isSolid(r2, c1) || isSolid(r2, c2))) {
+            player.y = r2 * BLOCK_SIZE - player.h;
+            player.vy = 0;
+            player.grounded = true;
+        } else {
+            player.grounded = false;
+        }
+
+        if (player.vy < 0 && (isSolid(r1, c1) || isSolid(r1, c2))) {
+            player.y = (r1 + 1) * BLOCK_SIZE;
+            player.vy = 0;
+        }
+
+        // Düşme sınırı
+        if (player.y > canvas.height) {
+            player.x = 100;
+            player.y = 100;
+            player.vy = 0;
+        }
     }
 
     function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Ağaçlar
-        trees.forEach(tree => {
-            ctx.fillStyle = '#22c55e';
-            ctx.beginPath();
-            ctx.arc(tree.x, tree.y, tree.size, 0, Math.PI * 2);
-            ctx.fill();
-        });
-
-        // Düşmanlar
-        enemies.forEach(enemy => {
-            ctx.fillStyle = '#ef4444';
-            ctx.beginPath();
-            ctx.arc(enemy.x, enemy.y, enemy.size, 0, Math.PI * 2);
-            ctx.fill();
-        });
+        // Blokları çiz
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                const type = grid[r][c];
+                if (type !== 0) {
+                    ctx.fillStyle = BLOCK_COLORS[type];
+                    ctx.fillRect(c * BLOCK_SIZE, r * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+                    ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+                    ctx.strokeRect(c * BLOCK_SIZE, r * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+                }
+            }
+        }
 
         // Oyuncu
-        ctx.fillStyle = '#3b82f6';
-        ctx.beginPath();
-        ctx.arc(player.x, player.y, player.size, 0, Math.PI * 2);
-        ctx.fill();
-    }
-
-    function updateUI() {
-        healthEl.textContent = health;
-        woodEl.textContent = woodCount;
-        scoreEl.textContent = score;
-    }
-
-    function endGame() {
-        gameOver = true;
-        finalScoreEl.textContent = woodCount;
-        gameOverEl.classList.remove('hidden');
-    }
-
-    function resetGame() {
-        gameOverEl.classList.add('hidden');
-        init();
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(player.x, player.y, player.w, player.h);
     }
 
     function loop() {
@@ -251,7 +251,8 @@
         requestAnimationFrame(loop);
     }
 
-    init();
+    generateWorld();
+    updateUI();
     loop();
 </script>
 </body>
